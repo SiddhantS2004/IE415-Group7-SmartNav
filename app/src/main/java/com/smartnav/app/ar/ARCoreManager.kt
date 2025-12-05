@@ -96,6 +96,27 @@ class ARCoreManager(private val context: Context) : GLSurfaceView.Renderer {
     private var totalMapPoints = 0
     private var keyframeCount = 0
     private var obstacleCount = 0
+    
+    /**
+     * Get accumulated CLOSE obstacle points for grid visualization
+     * Returns obstacles in coordinates relative to origin (same as SLAM path)
+     * Only includes obstacles within 2 meters of where they were detected
+     */
+    fun getObstacleMapPoints(): List<Position3D> {
+        if (originPose == null) return emptyList()
+        
+        val origin = originPose!!
+        
+        // Convert each map point from ARCore world coords to origin-relative coords
+        // This syncs obstacles with the SLAM path on the grid
+        return mapPoints.map { mp ->
+            Position3D(
+                x = mp.x - origin.tx(),           // Same transform as position
+                y = mp.y - origin.ty(),
+                z = -(mp.z - origin.tz())         // Z is negated like in updatePosition
+            )
+        }
+    }
 
     // Position tracking
     private val _currentPosition = MutableStateFlow(Position3D(0f, 0f, 0f))
@@ -436,8 +457,8 @@ class ARCoreManager(private val context: Context) : GLSurfaceView.Renderer {
             // Get camera position for distance-based filtering
             val camPos = camera.pose
             
-            // Add ALL points within detection range to map (not just keyframes)
-            // This provides more accurate obstacle mapping
+            // Add ONLY CLOSE obstacles to map (< 2m - accurate red dots)
+            // Far obstacles are inaccurate so we don't store them
             val timestamp = currentTime
             var addedPoints = 0
             var closeObstacles = 0
@@ -455,20 +476,12 @@ class ARCoreManager(private val context: Context) : GLSurfaceView.Renderer {
                     (z - camPos.tz()) * (z - camPos.tz())
                 )
                 
-                // Lower confidence threshold for close objects (better obstacle detection)
-                // Close objects (< 3m): accept lower confidence (0.2)
-                // Far objects (> 3m): need higher confidence (0.4)
-                val confidenceThreshold = if (distToCamera < 3.0f) 0.2f else 0.4f
-                
-                if (confidence > confidenceThreshold) {
-                    // Smaller deduplication threshold for close objects (more detail)
-                    val dedupThreshold = if (distToCamera < 2.0f) 0.03f else 0.08f
-                    
-                    if (!isPointNearExisting(x, y, z, dedupThreshold)) {
+                // Only store CLOSE obstacles (< 2m) - these are accurate
+                if (distToCamera < 2.0f && confidence > 0.2f) {
+                    if (!isPointNearExisting(x, y, z, 0.03f)) {
                         mapPoints.add(MapPoint(x, y, z, confidence, timestamp))
                         addedPoints++
-                        
-                        if (distToCamera < 2.0f) closeObstacles++
+                        closeObstacles++
                     }
                 }
             }
@@ -633,9 +646,8 @@ class ARCoreManager(private val context: Context) : GLSurfaceView.Renderer {
         GLES20.glUseProgram(featureProgram)
         GLES20.glUniformMatrix4fv(featureMvpUniform, 1, false, mvpMatrix, 0)
         
-        // Prepare buffers for different distance categories
-        val closePoints = mutableListOf<Float>()  // < 2m - obstacles (red)
-        val farPoints = mutableListOf<Float>()    // > 2m - environment (blue)
+        // Prepare buffer for close obstacles only (< 2m)
+        val closePoints = mutableListOf<Float>()
         
         val currentPos = _currentPosition.value
         
@@ -647,12 +659,11 @@ class ARCoreManager(private val context: Context) : GLSurfaceView.Renderer {
             
             if (dist < 2.0f) {
                 closePoints.addAll(listOf(mp.x, mp.y, mp.z, 1f))
-            } else {
-                farPoints.addAll(listOf(mp.x, mp.y, mp.z, 1f))
             }
+            // Far points no longer tracked - removed blue dots
         }
         
-        // Draw close obstacles in RED
+        // Draw close obstacles in RED only
         if (closePoints.isNotEmpty()) {
             GLES20.glUniform1f(featurePointSizeUniform, 8.0f)
             GLES20.glUniform4f(featureColorUniform, 1.0f, 0.2f, 0.0f, 0.9f)
@@ -661,18 +672,6 @@ class ARCoreManager(private val context: Context) : GLSurfaceView.Renderer {
             GLES20.glEnableVertexAttribArray(featurePositionAttrib)
             GLES20.glVertexAttribPointer(featurePositionAttrib, 4, GLES20.GL_FLOAT, false, 16, buffer)
             GLES20.glDrawArrays(GLES20.GL_POINTS, 0, closePoints.size / 4)
-            GLES20.glDisableVertexAttribArray(featurePositionAttrib)
-        }
-        
-        // Draw far environment in BLUE
-        if (farPoints.isNotEmpty()) {
-            GLES20.glUniform1f(featurePointSizeUniform, 5.0f)
-            GLES20.glUniform4f(featureColorUniform, 0.3f, 0.6f, 1.0f, 0.7f)
-            
-            val buffer = createFloatBuffer(farPoints.toFloatArray())
-            GLES20.glEnableVertexAttribArray(featurePositionAttrib)
-            GLES20.glVertexAttribPointer(featurePositionAttrib, 4, GLES20.GL_FLOAT, false, 16, buffer)
-            GLES20.glDrawArrays(GLES20.GL_POINTS, 0, farPoints.size / 4)
             GLES20.glDisableVertexAttribArray(featurePositionAttrib)
         }
     }

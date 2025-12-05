@@ -150,7 +150,8 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
             drDistance = 0f,
             slamDistance = 0f,
             driftError = 0f,
-            stepCount = 0
+            stepCount = 0,
+            obstaclePoints = emptyList()  // Clear obstacles on reset
         )
     }
 
@@ -237,7 +238,8 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
 
                         _navigationState.value = currentState.copy(
                             slamDistance = currentState.slamPath.getTotalDistance(),
-                            driftError = driftError
+                            driftError = driftError,
+                            obstaclePoints = arCoreManager?.getObstacleMapPoints() ?: emptyList()
                         )
                     }
 

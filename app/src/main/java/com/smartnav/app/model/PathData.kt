@@ -102,5 +102,6 @@ data class NavigationState(
     val slamDistance: Float = 0f,
     val driftError: Float = 0f,  // Difference between DR and SLAM
     val stepCount: Int = 0,
-    val currentSensorData: SensorData = SensorData()
+    val currentSensorData: SensorData = SensorData(),
+    val obstaclePoints: List<Position3D> = emptyList()  // Detected obstacles from SLAM
 )

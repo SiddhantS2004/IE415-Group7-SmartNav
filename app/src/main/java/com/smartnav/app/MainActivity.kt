@@ -348,7 +348,8 @@ fun SmartNavApp(viewModel: SensorViewModel = viewModel()) {
                     PathVisualization(
                         modifier = Modifier.fillMaxSize(),
                         drPath = navigationState.drPath.positions,
-                        slamPath = navigationState.slamPath.positions
+                        slamPath = navigationState.slamPath.positions,
+                        obstaclePoints = navigationState.obstaclePoints
                     )
                 }
 
@@ -515,7 +516,8 @@ fun SmartNavTopBar(
 fun PathVisualization(
     modifier: Modifier = Modifier,
     drPath: List<Position3D>,
-    slamPath: List<Position3D>
+    slamPath: List<Position3D>,
+    obstaclePoints: List<Position3D> = emptyList()
 ) {
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp.dp
@@ -529,8 +531,8 @@ fun PathVisualization(
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
     
-    // Calculate the maximum extent of all points to auto-fit
-    val allPoints = drPath + slamPath
+    // Calculate the maximum extent of all points to auto-fit (include obstacles)
+    val allPoints = drPath + slamPath + obstaclePoints
     val maxExtent = remember(allPoints.size) {
         if (allPoints.isEmpty()) 1f
         else {
@@ -658,6 +660,29 @@ fun PathVisualization(
                     center = lastSLAM
                 )
             }
+            
+            // Draw obstacle points (GREEN dots - environment map from SLAM camera)
+            if (obstaclePoints.isNotEmpty()) {
+                // Sample obstacles to avoid drawing too many (max 500 for performance)
+                val sampled = if (obstaclePoints.size > 500) {
+                    obstaclePoints.filterIndexed { index, _ -> index % (obstaclePoints.size / 500 + 1) == 0 }
+                } else {
+                    obstaclePoints
+                }
+                
+                for (obstacle in sampled) {
+                    val point = obstacle.to2DOffset(scale, centerX, centerY)
+                    // Only draw if within visible area
+                    if (point.x >= -50 && point.x <= size.width + 50 &&
+                        point.y >= -50 && point.y <= size.height + 50) {
+                        drawCircle(
+                            color = Color(0xFF00FF00).copy(alpha = 0.6f),  // Green with transparency
+                            radius = 4f,
+                            center = point
+                        )
+                    }
+                }
+            }
         }
 
         // Legend
@@ -684,6 +709,16 @@ fun PathVisualization(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("SLAM", color = Color.White, fontSize = 14.sp)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .background(Color(0xFF00FF00))
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Obstacles (${obstaclePoints.size})", color = Color.White, fontSize = 14.sp)
             }
         }
         
