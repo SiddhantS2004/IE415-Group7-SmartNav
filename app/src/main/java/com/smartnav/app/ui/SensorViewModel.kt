@@ -207,39 +207,51 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
         Log.d(TAG, "Starting ARCore updates, arCoreManager=${arCoreManager != null}")
         
         arCoreUpdateJob = viewModelScope.launch {
+            // Give ARCore a moment to fully initialize the camera
+            delay(500)
+            
             var frameCount = 0
+            var successfulFrames = 0
             var lastLogTime = System.currentTimeMillis()
             
             while (isActive) {
-                // Update ARCore and get SLAM position
-                val slamPosition = arCoreManager?.update()
-                frameCount++
+                try {
+                    // Update ARCore and get SLAM position
+                    val slamPosition = arCoreManager?.update()
+                    frameCount++
 
-                // Log periodically (every 2 seconds)
-                val now = System.currentTimeMillis()
-                if (now - lastLogTime > 2000) {
-                    Log.d(TAG, "ARCore update loop running. Frames: $frameCount, Last position: $slamPosition")
-                    lastLogTime = now
-                    frameCount = 0
-                }
+                    if (slamPosition != null) {
+                        successfulFrames++
+                        
+                        // Add to SLAM path
+                        val currentState = _navigationState.value
+                        currentState.slamPath.addPosition(slamPosition)
 
-                if (slamPosition != null) {
-                    // Add to SLAM path
-                    val currentState = _navigationState.value
-                    currentState.slamPath.addPosition(slamPosition)
+                        // Calculate drift error
+                        val drPosition = currentState.drPath.getCurrentPosition()
+                        val driftError = if (drPosition != null) {
+                            drPosition.distanceTo(slamPosition)
+                        } else {
+                            0f
+                        }
 
-                    // Calculate drift error
-                    val drPosition = currentState.drPath.getCurrentPosition()
-                    val driftError = if (drPosition != null) {
-                        drPosition.distanceTo(slamPosition)
-                    } else {
-                        0f
+                        _navigationState.value = currentState.copy(
+                            slamDistance = currentState.slamPath.getTotalDistance(),
+                            driftError = driftError
+                        )
                     }
 
-                    _navigationState.value = currentState.copy(
-                        slamDistance = currentState.slamPath.getTotalDistance(),
-                        driftError = driftError
-                    )
+                    // Log periodically (every 3 seconds)
+                    val now = System.currentTimeMillis()
+                    if (now - lastLogTime > 3000) {
+                        val trackingStatus = arCoreManager?.trackingStatus?.value ?: "N/A"
+                        Log.d(TAG, "ARCore: $successfulFrames/$frameCount successful frames. Status: $trackingStatus")
+                        lastLogTime = now
+                        frameCount = 0
+                        successfulFrames = 0
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Exception in ARCore update loop", e)
                 }
 
                 delay(33)  // ~30 Hz update rate
