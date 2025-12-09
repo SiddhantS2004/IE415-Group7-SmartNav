@@ -1,4 +1,4 @@
-SmartNav: Comparing Dead Reckoning and SLAM-Based Localization on Mobile Devices
+# SmartNav: Comparing Dead Reckoning and SLAM-Based Localization on Mobile Devices
 
 SmartNav is an Android application built using Kotlin + Jetpack Compose that compares two localization approaches on mobile devices:
 
@@ -9,7 +9,8 @@ SLAM using ARCore’s motion tracking for feature-based localization
 The app visualizes both trajectories in real time and demonstrates how IMU-based DR diverges over distance while SLAM remains stable and accurate.
 
 📌 Features
-✅ Dead Reckoning (DR)
+
+**✅ Dead Reckoning (DR)**
 
 Uses SensorManager to collect accelerometer, gyroscope, and (optionally) magnetometer data.
 
@@ -21,7 +22,7 @@ Plots DR trajectory live using Jetpack Compose.
 
 Supports step counting to stabilize short-range DR motion.
 
-✅ SLAM (ARCore)
+**✅ SLAM (ARCore)**
 
 Uses ARCore's motion-tracking subsystem.
 
@@ -33,7 +34,7 @@ Maps obstacles (green/red feature points based on distance).
 
 Significantly more accurate over medium/long distances.
 
-✅ Real-Time Visualization
+**✅ Real-Time Visualization**
 
 DR trajectory (red)
 
@@ -43,9 +44,9 @@ Obstacle point cloud (green / red for < 0.2m)
 
 Zoom controls, reset, start/stop modes.
 
-📲 Demo Video
+**📲 Demo Video**
 
-YouTube link: https://www.youtube.com/watch?v=hwJ3Zmbt1vw
+**YouTube link:** https://www.youtube.com/watch?v=hwJ3Zmbt1vw
  
 
 CAS_project
